@@ -1,9 +1,0 @@
-fastapi
-uvicorn
-sqlalchemy
-pyodbc
-pydantic
-python-jose[cryptography]
-email-validator
-alembic
-passlib[bcrypt]
