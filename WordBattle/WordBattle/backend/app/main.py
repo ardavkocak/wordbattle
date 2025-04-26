@@ -1,6 +1,6 @@
 # app/main.py
 from fastapi import FastAPI
-from app.routers import auth
+from app.routers import auth, game
 from app import models, database
 from fastapi.middleware.cors import CORSMiddleware
 

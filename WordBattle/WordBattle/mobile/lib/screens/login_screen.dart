@@ -1,30 +1,100 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
-class LoginScreen extends StatelessWidget {
+class LoginScreen extends StatefulWidget {
+  const LoginScreen({super.key});
+
+  @override
+  State<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController usernameController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
+  bool _isLoading = false;
 
-  void _login(BuildContext context) {
-    // Burada backend'e http isteği gönderilecek
-    Navigator.pushReplacementNamed(context, '/home');
+  Future<void> _login(BuildContext context) async {
+    final String username = usernameController.text.trim();
+    final String password = passwordController.text.trim();
+
+    if (username.isEmpty || password.isEmpty) {
+      _showSnackbar('Kullanıcı adı ve şifre boş olamaz.');
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    final url = Uri.parse('http://10.0.2.2:8000/auth/login');
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({"username": username, "password": password}),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final token = data["access_token"];
+
+        print('✅ Giriş başarılı! Token: $token');
+
+        // TODO: Token'ı saklayabilirsin (ileride shared_preferences ile)
+
+        Navigator.pushReplacementNamed(context, '/home');
+      } else {
+        final data = jsonDecode(response.body);
+        final error = data["detail"] ?? "Giriş başarısız.";
+        _showSnackbar(error);
+      }
+    } catch (e) {
+      _showSnackbar('Sunucuya ulaşılamadı.');
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  void _showSnackbar(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Giriş Yap')),
+      appBar: AppBar(title: const Text('Giriş Yap')),
       body: Padding(
-        padding: EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16),
         child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            TextField(controller: usernameController, decoration: InputDecoration(labelText: 'Kullanıcı Adı')),
-            TextField(controller: passwordController, obscureText: true, decoration: InputDecoration(labelText: 'Şifre')),
-            SizedBox(height: 20),
-            ElevatedButton(onPressed: () => _login(context), child: Text('Giriş Yap')),
+            TextField(
+              controller: usernameController,
+              decoration: const InputDecoration(labelText: 'Kullanıcı Adı'),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: passwordController,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'Şifre'),
+            ),
+            const SizedBox(height: 20),
+            _isLoading
+                ? const CircularProgressIndicator()
+                : ElevatedButton(
+                  onPressed: () => _login(context),
+                  child: const Text('Giriş Yap'),
+                ),
             TextButton(
               onPressed: () => Navigator.pushNamed(context, '/register'),
-              child: Text('Hesabın yok mu? Kayıt ol'),
-            )
+              child: const Text('Hesabın yok mu? Kayıt ol'),
+            ),
           ],
         ),
       ),

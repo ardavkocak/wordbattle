@@ -1,6 +1,6 @@
 # backend/app/routers/game.py
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from sqlalchemy.orm import Session
 from app import models, database
 
@@ -16,8 +16,12 @@ def get_db():
     finally:
         db.close()
 
+
 @router.post("/create")
-async def create_game(user_id: int, request: Request, db: Session = Depends(get_db)):
+async def create_game(request: Request, user_id: int = Query(...), db: Session = Depends(get_db)):
+    print(f"✅ Yeni oyun oluşturma isteği geldi. Kullanıcı ID: {user_id}")
+    body = await request.json()
+    print(f"📦 Gelen body verisi: {body}")
     """Yeni bir oyun başlatır (status = waiting) ve seçilen süreyi kaydeder."""
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:
@@ -31,7 +35,7 @@ async def create_game(user_id: int, request: Request, db: Session = Depends(get_
     new_game = models.Game(
         player1_id=user_id,
         player2_id=None,
-        status="waiting",
+        status="active",
         duration=duration  # ⬅ Burada süreyi kaydediyoruz
     )
     db.add(new_game)

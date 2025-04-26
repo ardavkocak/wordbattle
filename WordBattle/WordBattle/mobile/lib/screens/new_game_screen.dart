@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert'; // JSON encode/decode işlemleri için
+import '../services/api_service.dart'; // ApiService dosyasını import etmeyi unutma!
 
 class NewGameScreen extends StatefulWidget {
   const NewGameScreen({super.key});
@@ -10,7 +9,7 @@ class NewGameScreen extends StatefulWidget {
 }
 
 class _NewGameScreenState extends State<NewGameScreen> {
-  String? selectedDuration; // Kullanıcının seçtiği süre
+  String? selectedDuration;
 
   final Map<String, String> durations = {
     '2 Dakika': '2m',
@@ -21,44 +20,33 @@ class _NewGameScreenState extends State<NewGameScreen> {
 
   Future<void> _startMatchmaking() async {
     if (selectedDuration == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Lütfen bir süre seçin')),
-      );
+      _showSnackbar('Lütfen bir süre seçin.');
       return;
     }
 
-    try {
-      // Backend API adresi (kendi IP adresine göre değiştirmen gerekebilir)
-      const String apiUrl = 'http://10.0.2.2:8000/game/create'; 
-      // Not: Eğer Android emülatörde çalışıyorsan IP '10.0.2.2' olacak
-      // Gerçek telefonda test yapıyorsan, backend bilgisayarının yerel IP'sini yaz (örnek: 192.168.1.5 gibi)
+    const int userId = 1; // Şu an test için sabit kullanıcı ID'si
 
-      int userId = 1; // Şu anda örnek user id (ileride login olunca gerçek kullanıcıdan alınacak)
+    final result = await ApiService.startGame(
+      userId: userId,
+      duration: selectedDuration!,
+    );
 
-      // API'ye POST isteği gönderiyoruz
-      final response = await http.post(
-        Uri.parse('$apiUrl?user_id=$userId'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          "duration": selectedDuration,
-        }),
-      );
-
-      if (response.statusCode == 200) {
-        var responseData = jsonDecode(response.body);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Oyun oluşturuldu! Oyun ID: ${responseData["game_id"]}')),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Oyun oluşturulamadı: ${response.statusCode}')),
-        );
+    if (result != null) {
+      if (result.containsKey('message')) {
+        _showSnackbar('Oyun oluşturuldu! Oyun ID: ${result["game_id"]}');
+        Navigator.pop(context); // İstersen home'a geri dönebilirsin
+      } else if (result.containsKey('detail')) {
+        _showSnackbar('Hata: ${result["detail"]}');
       }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Hata oluştu: $e')),
-      );
+    } else {
+      _showSnackbar('Sunucuya bağlanılamadı.');
     }
+  }
+
+  void _showSnackbar(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -78,29 +66,29 @@ class _NewGameScreenState extends State<NewGameScreen> {
             const SizedBox(height: 20),
 
             // Süre Seçimi
-            ...durations.keys.map((label) => RadioListTile<String>(
-                  title: Text(label),
-                  value: durations[label]!,
-                  groupValue: selectedDuration,
-                  onChanged: (value) {
-                    setState(() {
-                      selectedDuration = value;
-                    });
-                  },
-                )),
+            ...durations.entries.map(
+              (entry) => RadioListTile<String>(
+                title: Text(entry.key),
+                value: entry.value,
+                groupValue: selectedDuration,
+                onChanged: (value) {
+                  setState(() {
+                    selectedDuration = value;
+                  });
+                },
+              ),
+            ),
 
             const Spacer(),
 
             ElevatedButton(
               onPressed: _startMatchmaking,
               style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
                 backgroundColor: Colors.indigo,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                textStyle: const TextStyle(fontSize: 18),
               ),
-              child: const Text(
-                'Eşleşmeyi Başlat',
-                style: TextStyle(fontSize: 18),
-              ),
+              child: const Text('Eşleşmeyi Başlat'),
             ),
           ],
         ),
