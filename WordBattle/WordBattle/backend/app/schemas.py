@@ -1,5 +1,7 @@
 # app/schemas.py
 from pydantic import BaseModel, EmailStr
+from datetime import datetime
+
 
 class UserCreate(BaseModel):
     username: str
@@ -18,3 +20,23 @@ class UserOut(BaseModel):
 class UserLogin(BaseModel):
     username: str
     password: str
+    
+    
+
+class GameCreate(BaseModel):
+    player1_id: int
+    player2_id: int
+    duration: str
+
+class GameOut(BaseModel):
+    id: int
+    player1_id: int
+    player2_id: int
+    winner_id: int | None
+    duration: str
+    created_at: datetime
+    status: str
+
+    model_config = {
+        "from_attributes": True
+    }
