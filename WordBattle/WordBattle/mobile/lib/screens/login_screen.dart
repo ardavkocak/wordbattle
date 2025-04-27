@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import '../user_session.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -39,10 +40,11 @@ class _LoginScreenState extends State<LoginScreen> {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final token = data["access_token"];
+        final userId = data["user_id"]; // ✅ Buradan user_id alıyoruz
 
-        print('✅ Giriş başarılı! Token: $token');
+        UserSession.userId = userId; // ✅ UserSession'a kaydediyoruz
 
-        // TODO: Token'ı saklayabilirsin (ileride shared_preferences ile)
+        print('✅ Giriş başarılı! Token: $token, User ID: $userId');
 
         Navigator.pushReplacementNamed(context, '/home');
       } else {

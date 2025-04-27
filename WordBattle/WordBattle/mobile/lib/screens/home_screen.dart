@@ -16,7 +16,10 @@ class HomeScreen extends StatelessWidget {
         ),
         child: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 24.0,
+              vertical: 16.0,
+            ),
             child: Column(
               children: [
                 const Text(
@@ -76,10 +79,10 @@ class HomeScreen extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(vertical: 20),
                     ),
                     onPressed: () {
-                      // Şu anda sadece debug mesajı
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Biten oyunlar ekranı yapılacak')),
-                      );
+                      Navigator.pushNamed(
+                        context,
+                        '/finished_games',
+                      ); // ✅ Artık navigasyon var
                     },
                     icon: const Icon(Icons.flag),
                     label: const Text('Biten Oyunlar'),
@@ -96,7 +99,11 @@ class HomeScreen extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
                   onPressed: () {
-                    Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+                    Navigator.pushNamedAndRemoveUntil(
+                      context,
+                      '/login',
+                      (route) => false,
+                    );
                   },
                   icon: const Icon(Icons.logout),
                   label: const Text('Çıkış Yap'),

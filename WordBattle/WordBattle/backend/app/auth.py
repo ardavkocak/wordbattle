@@ -36,4 +36,9 @@ def login(user: schemas.UserLogin, db: Session = Depends(get_db)):
     if not db_user or not utils.verify_password(user.password, db_user.hashed_password):
         raise HTTPException(status_code=400, detail="Geçersiz bilgiler")
     token = utils.create_access_token(data={"sub": db_user.username})
-    return {"access_token": token, "token_type": "bearer"}
+    return {
+    "access_token": token,
+    "token_type": "bearer",
+    "user_id": db_user.id  # 👈 Burası eklenecek
+}
+
