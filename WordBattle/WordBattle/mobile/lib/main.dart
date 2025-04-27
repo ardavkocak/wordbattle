@@ -15,7 +15,7 @@ class WordBattleApp extends StatelessWidget {
     return MaterialApp(
       title: 'Kelime Mayınları',
       theme: ThemeData(primarySwatch: Colors.indigo),
-      initialRoute: '/login',
+      initialRoute: '/login', // ilk ekran
       routes: {
         '/login': (context) => LoginScreen(),
         '/register': (context) => RegisterScreen(),

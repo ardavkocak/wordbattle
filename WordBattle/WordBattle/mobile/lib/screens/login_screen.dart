@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
+import '../services/auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -10,59 +9,38 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final TextEditingController usernameController = TextEditingController();
-  final TextEditingController passwordController = TextEditingController();
+  final usernameController = TextEditingController();
+  final passwordController = TextEditingController();
   bool _isLoading = false;
+  String? errorMessage;
 
-  Future<void> _login(BuildContext context) async {
-    final String username = usernameController.text.trim();
-    final String password = passwordController.text.trim();
+  void _login() async {
+    final username = usernameController.text.trim();
+    final password = passwordController.text.trim();
 
     if (username.isEmpty || password.isEmpty) {
       _showSnackbar('Kullanıcı adı ve şifre boş olamaz.');
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
-    final url = Uri.parse('http://10.0.2.2:8000/auth/login');
+    final message = await AuthService.login(
+      username: username,
+      password: password,
+    );
 
-    try {
-      final response = await http.post(
-        url,
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({"username": username, "password": password}),
-      );
+    setState(() => _isLoading = false);
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final token = data["access_token"];
-
-        print('✅ Giriş başarılı! Token: $token');
-
-        // TODO: Token'ı saklayabilirsin (ileride shared_preferences ile)
-
-        Navigator.pushReplacementNamed(context, '/home');
-      } else {
-        final data = jsonDecode(response.body);
-        final error = data["detail"] ?? "Giriş başarısız.";
-        _showSnackbar(error);
-      }
-    } catch (e) {
-      _showSnackbar('Sunucuya ulaşılamadı.');
-    } finally {
-      setState(() {
-        _isLoading = false;
-      });
+    if (message == null) {
+      Navigator.pushReplacementNamed(context, '/home');
+    } else {
+      _showSnackbar(message);
     }
   }
 
   void _showSnackbar(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -88,12 +66,12 @@ class _LoginScreenState extends State<LoginScreen> {
             _isLoading
                 ? const CircularProgressIndicator()
                 : ElevatedButton(
-                  onPressed: () => _login(context),
-                  child: const Text('Giriş Yap'),
-                ),
+                    onPressed: _login,
+                    child: const Text('Giriş Yap'),
+                  ),
             TextButton(
-              onPressed: () => Navigator.pushNamed(context, '/register'),
-              child: const Text('Hesabın yok mu? Kayıt ol'),
+              onPressed: () => Navigator.pushReplacementNamed(context, '/register'),
+              child: const Text('Hesabın yok mu? Kayıt Ol'),
             ),
           ],
         ),
