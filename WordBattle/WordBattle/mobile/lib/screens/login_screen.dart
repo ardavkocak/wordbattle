@@ -27,7 +27,7 @@ class _LoginScreenState extends State<LoginScreen> {
       _isLoading = true;
     });
 
-    final url = Uri.parse('http://10.0.2.2:8000/auth/login');
+    final url = Uri.parse('http://localhost:8000/login');
 
     try {
       final response = await http.post(

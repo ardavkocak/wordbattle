@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from . import models, schemas, utils
+from . import models, schemas
 from .database import SessionLocal
+from app import utils
 
-router = APIRouter(prefix="/auth")
+router = APIRouter()
+
 
 def get_db():
     db = SessionLocal()
@@ -18,7 +20,12 @@ def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
     if existing:
         raise HTTPException(status_code=400, detail="Kullanıcı adı alınmış.")
     hashed_pw = utils.hash_password(user.password)
-    new_user = models.User(username=user.username, email=user.email, hashed_password=hashed_pw)
+    new_user = models.User(
+    username=user.username,
+    email=user.email,
+    password=hashed_pw,         # BURAYA hashed password yaz
+    hashed_password=hashed_pw
+)
     db.add(new_user)
     db.commit()
     return {"message": "Kayıt başarılı"}

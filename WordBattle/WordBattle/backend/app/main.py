@@ -1,13 +1,12 @@
 # app/main.py
 from fastapi import FastAPI
-from app.routers import auth, game
-from app import models, database
+from app.routers import game
+from app import models, database, auth
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
-app.include_router(auth.router)
 app.include_router(game.router)
-
+app.include_router(auth.router)
 
 
 app.add_middleware(
@@ -20,4 +19,3 @@ app.add_middleware(
 
 # Tabloları oluştur (manuel migration yerine başlangıç için kullanabiliriz)
 models.Base.metadata.create_all(bind=database.engine)
-app.include_router(auth.router)
