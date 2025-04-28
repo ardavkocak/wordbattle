@@ -139,4 +139,22 @@ class ApiService {
       return false;
     }
   }
+
+  static Future<Map<String, dynamic>?> fetchGameDetails(int gameId) async {
+    final url = Uri.parse('$baseUrl/game/details?game_id=$gameId');
+
+    try {
+      final response = await http.get(url);
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        print('fetchGameDetails sunucu hatası: ${response.statusCode}');
+        return null;
+      }
+    } catch (e) {
+      print('fetchGameDetails hatası: $e');
+      return null;
+    }
+  }
 }

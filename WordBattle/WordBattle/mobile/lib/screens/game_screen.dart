@@ -27,10 +27,16 @@ class _GameScreenState extends State<GameScreen> {
   bool isLoading = true;
   Timer? _boardPollingTimer;
 
+  String myUsername = "";
+  String opponentUsername = "";
+  int myScore = 0;
+  int opponentScore = 0;
+
   @override
   void initState() {
     super.initState();
     _fetchBoardAndTurn();
+    _fetchGameDetails(); // 🔥 isim ve skorları çek
     _startPollingForBoard();
   }
 
@@ -64,28 +70,77 @@ class _GameScreenState extends State<GameScreen> {
     });
   }
 
+  Future<void> _fetchGameDetails() async {
+    final details = await ApiService.fetchGameDetails(widget.gameId);
+
+    if (details != null) {
+      setState(() {
+        int userId = widget.userId; // giriş yapan kullanıcının ID'si
+
+        if (userId == details['player1_id']) {
+          myUsername = details['player1_username'] ?? "Bilinmeyen";
+          opponentUsername = details['player2_username'] ?? "Bilinmeyen";
+          myScore = details['player1_score'] ?? 0;
+          opponentScore = details['player2_score'] ?? 0;
+        } else {
+          myUsername = details['player2_username'] ?? "Bilinmeyen";
+          opponentUsername = details['player1_username'] ?? "Bilinmeyen";
+          myScore = details['player2_score'] ?? 0;
+          opponentScore = details['player1_score'] ?? 0;
+        }
+      });
+    }
+  }
+
   void _startPollingForBoard() {
     _boardPollingTimer = Timer.periodic(const Duration(seconds: 2), (
       timer,
     ) async {
-      final fetchedBoard = await ApiService.fetchBoard(widget.gameId);
-      final fetchedTurn = await ApiService.fetchTurnUserId(
-        gameId: widget.gameId,
-      );
+      try {
+        final fetchedTurn = await ApiService.fetchTurnUserId(
+          gameId: widget.gameId,
+        );
 
-      if (fetchedBoard != null) {
-        setState(() {
-          board =
-              fetchedBoard
-                  .map((row) => row.map((e) => e.isEmpty ? null : e).toList())
-                  .toList();
-        });
-      }
+        if (fetchedTurn != null) {
+          bool newIsMyTurn = (fetchedTurn == widget.userId);
 
-      if (fetchedTurn != null) {
-        setState(() {
-          isMyTurn = (fetchedTurn == widget.userId);
-        });
+          // Eğer sırada değişiklik olduysa mutlaka board'u güncelle
+          if (newIsMyTurn != isMyTurn) {
+            isMyTurn = newIsMyTurn;
+
+            final fetchedBoard = await ApiService.fetchBoard(widget.gameId);
+            if (fetchedBoard != null) {
+              setState(() {
+                board =
+                    fetchedBoard
+                        .map(
+                          (row) =>
+                              row.map((e) => e.isEmpty ? null : e).toList(),
+                        )
+                        .toList();
+              });
+            }
+          } else {
+            // Eğer sıra bizde değilse ve değişiklik yoksa yine de server board'u çekelim
+            if (!isMyTurn) {
+              final fetchedBoard = await ApiService.fetchBoard(widget.gameId);
+              if (fetchedBoard != null) {
+                setState(() {
+                  board =
+                      fetchedBoard
+                          .map(
+                            (row) =>
+                                row.map((e) => e.isEmpty ? null : e).toList(),
+                          )
+                          .toList();
+                });
+              }
+            }
+            // Eğer sıra bizdeyse (ve değişiklik yoksa) server'dan board çekmiyoruz ❗
+          }
+        }
+      } catch (e) {
+        print('Polling sırasında hata oluştu: $e');
       }
     });
   }
@@ -174,12 +229,13 @@ class _GameScreenState extends State<GameScreen> {
               : Column(
                 children: [
                   TopBar(
-                    myUsername: "Ali",
-                    myScore: 0,
-                    opponentUsername: "Atakan",
-                    opponentScore: 0,
-                    remainingLetters: 86,
+                    myUsername: myUsername,
+                    myScore: myScore,
+                    opponentUsername: opponentUsername,
+                    opponentScore: opponentScore,
+                    remainingLetters: LetterPool.remainingLetters,
                   ),
+
                   Expanded(
                     child: Padding(
                       padding: const EdgeInsets.all(8.0),
@@ -262,6 +318,7 @@ class _GameScreenState extends State<GameScreen> {
                         isMyTurn
                             ? () async {
                               int score = calculateWordScore();
+                              print('✅ Bu kelimenin puanı: $score');
 
                               bool success = await ApiService.updateBoard(
                                 gameId: widget.gameId,
@@ -293,6 +350,16 @@ class _GameScreenState extends State<GameScreen> {
                                   print('❌ Sıra değiştirilemedi.');
                                 }
 
+                                // 🔥 BURASI: Eksik harfleri tamamlama
+                                setState(() {
+                                  int eksikHarfSayisi = 7 - myLetters.length;
+                                  if (eksikHarfSayisi > 0) {
+                                    myLetters.addAll(
+                                      LetterPool.drawLetters(eksikHarfSayisi),
+                                    );
+                                  }
+                                });
+
                                 await _fetchBoardAndTurn();
                               } else {
                                 ScaffoldMessenger.of(context).showSnackBar(
@@ -305,6 +372,7 @@ class _GameScreenState extends State<GameScreen> {
                               }
                             }
                             : null,
+
                     wordScore: calculateWordScore(),
                   ),
                 ],

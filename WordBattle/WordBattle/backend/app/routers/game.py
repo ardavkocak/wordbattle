@@ -259,3 +259,21 @@ async def change_turn(payload: dict = Body(...), db: Session = Depends(get_db)):
     db.refresh(game)
 
     return {"message": "Sıra değiştirildi.", "turn_user_id": game.turn_user_id}
+
+
+
+@router.get("/details")
+async def get_game_details(game_id: int, db: Session = Depends(get_db)):
+    game = db.query(models.Game).filter(models.Game.id == game_id).first()
+    if not game:
+        raise HTTPException(status_code=404, detail="Oyun bulunamadı.")
+    
+    player1 = db.query(models.User).filter(models.User.id == game.player1_id).first()
+    player2 = db.query(models.User).filter(models.User.id == game.player2_id).first()
+
+    return {
+        "player1_username": player1.username if player1 else None,
+        "player2_username": player2.username if player2 else None,
+        "player1_score": game.player1_score if hasattr(game, 'player1_score') else 0,
+        "player2_score": game.player2_score if hasattr(game, 'player2_score') else 0
+    }

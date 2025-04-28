@@ -47,15 +47,16 @@ class LetterPool {
 
   static List<String> drawLetters(int count) {
     final random = Random();
-    List<String> copyPool = List.from(_pool);
     List<String> drawn = [];
 
     for (int i = 0; i < count; i++) {
-      if (copyPool.isEmpty) break;
-      int index = random.nextInt(copyPool.length);
-      drawn.add(copyPool.removeAt(index));
+      if (_pool.isEmpty) break;
+      int index = random.nextInt(_pool.length);
+      drawn.add(_pool.removeAt(index)); // 🔥 Direkt _pool'dan çekiyoruz
     }
 
     return drawn;
   }
+
+  static int get remainingLetters => _pool.length;
 }
