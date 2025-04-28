@@ -1,9 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from . import models, schemas, utils
+from . import models, schemas
 from .database import SessionLocal
+from app import utils
+from app.word_utils import kelime_var_mi
+from app.letter_pool import LetterPool
 
-router = APIRouter(prefix="/auth")
+router = APIRouter()
+
 
 def get_db():
     db = SessionLocal()
@@ -18,7 +22,12 @@ def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
     if existing:
         raise HTTPException(status_code=400, detail="Kullanıcı adı alınmış.")
     hashed_pw = utils.hash_password(user.password)
-    new_user = models.User(username=user.username, email=user.email, hashed_password=hashed_pw)
+    new_user = models.User(
+    username=user.username,
+    email=user.email,
+    password=hashed_pw,         # BURAYA hashed password yaz
+    hashed_password=hashed_pw
+)
     db.add(new_user)
     db.commit()
     return {"message": "Kayıt başarılı"}
@@ -29,4 +38,24 @@ def login(user: schemas.UserLogin, db: Session = Depends(get_db)):
     if not db_user or not utils.verify_password(user.password, db_user.hashed_password):
         raise HTTPException(status_code=400, detail="Geçersiz bilgiler")
     token = utils.create_access_token(data={"sub": db_user.username})
-    return {"access_token": token, "token_type": "bearer"}
+    return {
+    "access_token": token,
+    "token_type": "bearer",
+    "user_id": db_user.id  # 👈 Burası eklenecek
+}
+
+@router.post("/check-word")
+def check_word(word: str):
+    if kelime_var_mi(word):
+        return {"result": "Geçerli kelime!"}
+    else:
+        return {"result": "Geçersiz kelime."}
+    
+
+game_pool=LetterPool()
+    
+@router.get("/draw-letters")
+def draw_letters(count: int = 7):
+    drawn_letters = game_pool.draw_letters(count)
+    return {"drawn": drawn_letters, "remaining": game_pool.remaining_letters()}
+

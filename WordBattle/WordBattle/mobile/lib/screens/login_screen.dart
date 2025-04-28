@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import '../services/auth_service.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import '../user_session.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -9,38 +11,60 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final usernameController = TextEditingController();
-  final passwordController = TextEditingController();
+  final TextEditingController usernameController = TextEditingController();
+  final TextEditingController passwordController = TextEditingController();
   bool _isLoading = false;
-  String? errorMessage;
 
-  void _login() async {
-    final username = usernameController.text.trim();
-    final password = passwordController.text.trim();
+  Future<void> _login(BuildContext context) async {
+    final String username = usernameController.text.trim();
+    final String password = passwordController.text.trim();
 
     if (username.isEmpty || password.isEmpty) {
       _showSnackbar('Kullanıcı adı ve şifre boş olamaz.');
       return;
     }
 
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+    });
 
-    final message = await AuthService.login(
-      username: username,
-      password: password,
-    );
+    final url = Uri.parse('http://localhost:8000/login');
 
-    setState(() => _isLoading = false);
+    try {
+      final response = await http.post(
+        url,
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({"username": username, "password": password}),
+      );
 
-    if (message == null) {
-      Navigator.pushReplacementNamed(context, '/home');
-    } else {
-      _showSnackbar(message);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final token = data["access_token"];
+        final userId = data["user_id"]; // ✅ Buradan user_id alıyoruz
+
+        UserSession.userId = userId; // ✅ UserSession'a kaydediyoruz
+
+        print('✅ Giriş başarılı! Token: $token, User ID: $userId');
+
+        Navigator.pushReplacementNamed(context, '/home');
+      } else {
+        final data = jsonDecode(response.body);
+        final error = data["detail"] ?? "Giriş başarısız.";
+        _showSnackbar(error);
+      }
+    } catch (e) {
+      _showSnackbar('Sunucuya ulaşılamadı.');
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 
   void _showSnackbar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -66,12 +90,12 @@ class _LoginScreenState extends State<LoginScreen> {
             _isLoading
                 ? const CircularProgressIndicator()
                 : ElevatedButton(
-                    onPressed: _login,
-                    child: const Text('Giriş Yap'),
-                  ),
+                  onPressed: () => _login(context),
+                  child: const Text('Giriş Yap'),
+                ),
             TextButton(
-              onPressed: () => Navigator.pushReplacementNamed(context, '/register'),
-              child: const Text('Hesabın yok mu? Kayıt Ol'),
+              onPressed: () => Navigator.pushNamed(context, '/register'),
+              child: const Text('Hesabın yok mu? Kayıt ol'),
             ),
           ],
         ),

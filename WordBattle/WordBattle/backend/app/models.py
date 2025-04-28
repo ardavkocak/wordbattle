@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Text
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.database import Base
@@ -28,6 +28,8 @@ class Game(Base):
     duration = Column(String(10), nullable=False)  # '2m', '5m', '12h', '24h'
     created_at = Column(DateTime, default=datetime.utcnow)
     status = Column(String(20), default="pending")
+    board_state = Column(Text, nullable=True)  # 🔥 Burası yeni
+    turn_user_id = Column(Integer, nullable=True)
 
     # İlişkiler
     player1 = relationship("User", back_populates="games_as_player1", foreign_keys=[player1_id])

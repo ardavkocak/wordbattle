@@ -10,54 +10,36 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final usernameController = TextEditingController();
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
-  bool _isLoading = false;
-  String? errorMessage;
+  String? error;
 
   void _register() async {
-    setState(() => _isLoading = true);
-
     final message = await AuthService.register(
-      username: usernameController.text.trim(),
-      email: emailController.text.trim(),
-      password: passwordController.text.trim(),
+      username: usernameController.text,
+      email: emailController.text,
+      password: passwordController.text,
     );
 
-    setState(() => _isLoading = false);
-
     if (message == "Kayıt başarılı!") {
-      Navigator.pushReplacementNamed(context, '/login');
+      Navigator.pushReplacementNamed(context, '/home');
     } else {
-      setState(() => errorMessage = message ?? "Kayıt başarısız.");
+      setState(() => error = message);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Kayıt Ol')),
+      appBar: AppBar(title: Text('Kayıt Ol')),
       body: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(16),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            TextField(controller: usernameController, decoration: const InputDecoration(labelText: 'Kullanıcı Adı')),
-            const SizedBox(height: 10),
-            TextField(controller: emailController, decoration: const InputDecoration(labelText: 'E-posta')),
-            const SizedBox(height: 10),
-            TextField(controller: passwordController, obscureText: true, decoration: const InputDecoration(labelText: 'Şifre')),
-            const SizedBox(height: 20),
-            _isLoading
-                ? const CircularProgressIndicator()
-                : ElevatedButton(
-                    onPressed: _register,
-                    child: const Text('Kayıt Ol'),
-                  ),
-            TextButton(
-              onPressed: () => Navigator.pushReplacementNamed(context, '/login'),
-              child: const Text('Zaten hesabın var mı? Giriş Yap'),
-            ),
-            if (errorMessage != null)
-              Text(errorMessage!, style: const TextStyle(color: Colors.red)),
+            TextField(controller: usernameController, decoration: InputDecoration(labelText: 'Kullanıcı Adı')),
+            TextField(controller: emailController, decoration: InputDecoration(labelText: 'E-posta')),
+            TextField(controller: passwordController, obscureText: true, decoration: InputDecoration(labelText: 'Şifre')),
+            SizedBox(height: 20),
+            ElevatedButton(onPressed: _register, child: Text('Kayıt Ol')),
+            if (error != null) Text(error!, style: TextStyle(color: Colors.red)),
           ],
         ),
       ),

@@ -2,10 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class AuthService {
-  
-  //static const String baseUrl = 'http://10.0.2.2:8000'; // Android emulator için
-  // Eğer tarayıcıda çalıştırıyorsan:
-  static const String baseUrl = 'http://localhost:8000';
+  static const String baseUrl = 'http://localhost:8000'; // Chrome emulator için
 
   static Future<String?> register({
     required String username,
@@ -13,7 +10,7 @@ class AuthService {
     required String password,
   }) async {
     final response = await http.post(
-      Uri.parse('$baseUrl/auth/register'),
+      Uri.parse('$baseUrl/register'), // 👈 BURASI DEĞİŞTİ
       headers: {"Content-Type": "application/json"},
       body: jsonEncode({
         "username": username,
@@ -34,21 +31,32 @@ class AuthService {
     required String password,
   }) async {
     final response = await http.post(
-      Uri.parse('$baseUrl/auth/login'),
+      Uri.parse('$baseUrl/login'), // 👈 BURASI DEĞİŞTİ
       headers: {"Content-Type": "application/json"},
-      body: jsonEncode({
-        "username": username,
-        "password": password,
-      }),
+      body: jsonEncode({"username": username, "password": password}),
     );
 
     if (response.statusCode == 200) {
       final json = jsonDecode(response.body);
       final token = json['access_token'];
-      // TODO: Token'ı güvenli depola (flutter_secure_storage)
       return null; // Hata yok
     } else {
       return jsonDecode(response.body)["detail"];
     }
   }
+
+
+  static Future<String> checkWord(String word) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/auth/check-word?word=$word'),
+      headers: {"Content-Type": "application/json"},
+    );
+
+    if (response.statusCode == 200) {
+      final json = jsonDecode(response.body);
+      return json["result"];
+    } else {
+      return "Bağlantı hatası.";
+    }
+
 }
