@@ -1,11 +1,16 @@
 # backend/app/routers/game.py
 
+from app.letter_pool import LetterPool
+from app.word_utils import kelime_var_mi
 from fastapi import APIRouter, Depends, HTTPException, Request, Query, Body
 from sqlalchemy.orm import Session
 from app import models, database
 import json
 from typing import List
 from app.game_end_utils import oyun_sonu_hesapla 
+from app.global_state import game_pools
+from app.services.game_manager import game_manager
+
 
 router = APIRouter(
     prefix="/game",
@@ -342,3 +347,28 @@ async def end_game(
         "message": "Oyun başarıyla sonuçlandı.",
         "sonuc": sonuc
     }
+
+
+
+@router.post("/check-word")
+def check_word(word: str):
+    if kelime_var_mi(word):
+        return {"result": "Geçerli kelime!"}
+    else:
+        return {"result": "Geçersiz kelime."}
+    
+@router.get("/draw-letters")
+def draw_letters(game_id: int, count: int = 7):
+    if game_id not in game_pools:
+        game_pools[game_id] = LetterPool()
+
+    pool = game_pools[game_id]
+    drawn_letters = pool.draw_letters(count)
+    return {"drawn": drawn_letters, "remaining": pool.remaining_letters()}
+
+
+@router.get("/remaining-letters")
+def get_remaining_letters(game_id: int):
+    if game_id not in game_pools:
+        return {"remaining": 100}  # veya 0
+    return {"remaining": game_pools[game_id].remaining_letters()}
