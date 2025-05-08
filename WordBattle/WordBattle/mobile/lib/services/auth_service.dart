@@ -45,18 +45,25 @@ class AuthService {
     }
   }
 
-
   static Future<String> checkWord(String word) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/auth/check-word?word=$word'),
-      headers: {"Content-Type": "application/json"},
-    );
-
-    if (response.statusCode == 200) {
-      final json = jsonDecode(response.body);
-      return json["result"];
-    } else {
-      return "Bağlantı hatası.";
+    final url = Uri.parse(
+      '$baseUrl/game/check-word',
+    ); // ❗ artık query param yok
+    try {
+      final response = await http.post(
+        url,
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({"word": word}), // ❗ gövdeye eklendi
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        print("🧠 Backend kelime sonucu: ${data["result"]}");
+        return data["result"];
+      } else {
+        return "Sunucu hatası: ${response.statusCode}";
+      }
+    } catch (e) {
+      return "İstek hatası: $e";
     }
-
+  }
 }

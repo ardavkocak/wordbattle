@@ -44,18 +44,3 @@ def login(user: schemas.UserLogin, db: Session = Depends(get_db)):
     "user_id": db_user.id  # 👈 Burası eklenecek
 }
 
-@router.post("/check-word")
-def check_word(word: str):
-    if kelime_var_mi(word):
-        return {"result": "Geçerli kelime!"}
-    else:
-        return {"result": "Geçersiz kelime."}
-    
-
-game_pool=LetterPool()
-    
-@router.get("/draw-letters")
-def draw_letters(count: int = 7):
-    drawn_letters = game_pool.draw_letters(count)
-    return {"drawn": drawn_letters, "remaining": game_pool.remaining_letters()}
-

@@ -17,6 +17,7 @@ class _CheckWordScreenState extends State<CheckWordScreen> {
     if (word.isEmpty) return;
 
     final result = await AuthService.checkWord(word);
+    print("🔍 Flutter gelen yanıt: $result"); // 👈 EKLE BUNU
     setState(() {
       resultMessage = result;
     });
@@ -32,9 +33,7 @@ class _CheckWordScreenState extends State<CheckWordScreen> {
           children: [
             TextField(
               controller: wordController,
-              decoration: const InputDecoration(
-                labelText: 'Kelime Girin',
-              ),
+              decoration: const InputDecoration(labelText: 'Kelime Girin'),
             ),
             const SizedBox(height: 20),
             ElevatedButton(

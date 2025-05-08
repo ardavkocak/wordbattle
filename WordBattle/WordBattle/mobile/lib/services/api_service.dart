@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  static const String baseUrl = 'http://localhost:8000'; // Chrome server için
+  static const String baseUrl = 'http://127.0.0.1:8000'; // Chrome server için
 
   // 🆕 Yeni Oyun Başlat (POST /game/create)
   static Future<Map<String, dynamic>?> startGame({
@@ -30,6 +30,34 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, dynamic>?> makeMove({
+    required int gameId,
+    required int userId,
+    required List<List<String?>> board,
+    required List<Map<String, dynamic>> placedTiles,
+  }) async {
+    final url = Uri.parse(
+      '$baseUrl/game/make_move?game_id=$gameId&user_id=$userId',
+    );
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({"board_state": board, "placed_tiles": placedTiles}),
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        print('makeMove başarısız: ${response.body}');
+      }
+    } catch (e) {
+      print('makeMove hatası: $e');
+    }
+    return null;
+  }
+
   // 🔥 Oyun Durumunu Kontrol Et (GET /game/status)
   static Future<String?> checkGameStatus({required int gameId}) async {
     final url = Uri.parse('$baseUrl/game/status?game_id=$gameId');
@@ -43,6 +71,18 @@ class ApiService {
       print('Game status kontrol edilemedi: $e');
     }
     return null;
+  }
+
+  static Future<List<dynamic>?> fetchActiveGames(int userId) async {
+    final url = Uri.parse('http://localhost:8000/game/active?user_id=$userId');
+    final response = await http.get(url);
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      print("❌ Aktif oyunlar getirilemedi.");
+      return null;
+    }
   }
 
   // 🔥 Tahtayı Çek (GET /game/get_board)
@@ -70,6 +110,21 @@ class ApiService {
       print("fetchBoard çekilirken hata oluştu: $e");
       return null;
     }
+  }
+
+  static Future<Map<String, dynamic>?> getRemainingLetters({
+    required int gameId,
+  }) async {
+    final url = Uri.parse('$baseUrl/game/remaining-letters?game_id=$gameId');
+    try {
+      final response = await http.get(url);
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+    } catch (e) {
+      print("getRemainingLetters hatası: $e");
+    }
+    return null;
   }
 
   // 🔥 Tahtayı Güncelle (POST /game/update_board)
@@ -140,6 +195,45 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, dynamic>?> fetchTimeStatus(int gameId) async {
+    final url = Uri.parse('$baseUrl/game/time-status?game_id=$gameId');
+
+    try {
+      final response = await http.get(url);
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        print("⛔ fetchTimeStatus hatası: ${response.body}");
+      }
+    } catch (e) {
+      print("❌ fetchTimeStatus exception: $e");
+    }
+    return null;
+  }
+
+  static Future<Map<String, dynamic>?> drawLetters({
+    required int gameId,
+    required int userId, // 👈 EKLENDİ
+    int count = 7,
+  }) async {
+    final url = Uri.parse(
+      '$baseUrl/game/draw-letters?game_id=$gameId&user_id=$userId&count=$count',
+    );
+
+    try {
+      final response = await http.get(url);
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        print('drawLetters başarısız: ${response.body}');
+        return null;
+      }
+    } catch (e) {
+      print('drawLetters hatası: $e');
+      return null;
+    }
+  }
+
   static Future<Map<String, dynamic>?> fetchGameDetails(int gameId) async {
     final url = Uri.parse('$baseUrl/game/details?game_id=$gameId');
 
@@ -156,5 +250,19 @@ class ApiService {
       print('fetchGameDetails hatası: $e');
       return null;
     }
+  }
+
+  static Future<int?> fetchRemainingLetters({required int gameId}) async {
+    final url = Uri.parse('$baseUrl/game/remaining-letters?game_id=$gameId');
+    try {
+      final response = await http.get(url);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['remaining'];
+      }
+    } catch (e) {
+      print('fetchRemainingLetters hatası: $e');
+    }
+    return null;
   }
 }

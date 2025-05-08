@@ -2,8 +2,7 @@
 from fastapi import FastAPI
 from app.routers import game
 from app import models, database, auth
-from app.word_utils import kelime_listesini_yukle
-from app.letter_pool import LetterPool
+from app.word_utils import kelime_listesini_yukle, kelime_var_mi
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
@@ -22,4 +21,5 @@ app.add_middleware(
 # Tabloları oluştur (manuel migration yerine başlangıç için kullanabiliriz)
 models.Base.metadata.create_all(bind=database.engine)
 kelime_listesini_yukle()
-game_pool=LetterPool()
+
+print("Test 'ev':", kelime_var_mi("ev"))

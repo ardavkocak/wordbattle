@@ -3,13 +3,19 @@ import 'package:flutter/material.dart';
 class BottomBar extends StatelessWidget {
   final List<String> letters;
   final Future<void> Function()? onConfirm;
-  final int wordScore;
+  final int? wordScore; // opsiyonel hale getir
+  final VoidCallback? onUndo; // 👈 Geri al fonksiyonu
+  final VoidCallback? onPass;
+  final VoidCallback? onResign;
 
   const BottomBar({
     super.key,
     required this.letters,
     required this.onConfirm,
-    required this.wordScore,
+    this.wordScore, // artık gerekli değil
+    required this.onUndo, // 👈 Yeni parametre eklendi
+    this.onPass, // ✅ yeni
+    this.onResign, // ✅ yeni
   });
 
   @override
@@ -19,11 +25,12 @@ class BottomBar extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
       child: Column(
         children: [
-          // Harfler
+          // 🔠 Harf kutuları
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children:
                 letters.map((letter) {
+                  print("🧩 Drag harfi: $letter"); // DEBUG
                   return Draggable<String>(
                     data: letter,
                     feedback: _buildTile(letter, isDragging: true),
@@ -33,10 +40,12 @@ class BottomBar extends StatelessWidget {
                 }).toList(),
           ),
           const SizedBox(height: 12),
-          // Onay Butonu ve Skor
+
+          // ✅ Butonlar ve skor
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
+              // Onayla butonu
               ElevatedButton.icon(
                 onPressed:
                     onConfirm != null
@@ -54,13 +63,50 @@ class BottomBar extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: 24),
-              Text(
-                "Puan: $wordScore",
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.indigo,
+              const SizedBox(width: 16),
+
+              // Geri Al butonu
+              ElevatedButton.icon(
+                onPressed: onUndo,
+                icon: const Icon(Icons.undo),
+                label: const Text("Geri Al"),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.orange,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 12,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+
+              // ✅ Pas Geç
+              ElevatedButton.icon(
+                onPressed: onPass,
+                icon: const Icon(Icons.pan_tool),
+                label: const Text("Pas"),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blueGrey,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 12,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+
+              Text("Skor: ${wordScore ?? 0}"), // null gelirse 0 göster
+              // ✅ Çekil
+              ElevatedButton.icon(
+                onPressed: onResign,
+                icon: const Icon(Icons.flag),
+                label: const Text("Çekil"),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.redAccent,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 12,
+                  ),
                 ),
               ),
             ],

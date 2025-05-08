@@ -1,11 +1,16 @@
 # backend/app/routers/game.py
 
+from datetime import datetime
+from app.word_utils import kelime_var_mi
 from fastapi import APIRouter, Depends, HTTPException, Request, Query, Body
 from sqlalchemy.orm import Session
 from app import models, database
 import json
-from typing import List
-from app.game_end_utils import oyun_sonu_hesapla 
+from app.services.game_manager import game_manager
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
+from app.services.game_services import calculate_score, apply_mine_and_reward_effects, assign_mines_and_rewards
+
 
 router = APIRouter(
     prefix="/game",
@@ -39,6 +44,19 @@ async def create_game(request: Request, user_id: int = Query(...), db: Session =
     if not duration:
         raise HTTPException(status_code=400, detail="Süre bilgisi eksik.")
 
+    # 🎯 Süre eşlemesi (saniye cinsinden)
+    duration_map = {
+        "2m": 120,
+        "5m": 300,
+        "12h": 43200,
+        "24h": 86400
+    }
+    base_time = duration_map.get(duration)
+    if not base_time:
+        raise HTTPException(status_code=400, detail="Geçersiz süre değeri.")
+
+    now = datetime.utcnow()
+
     # 1. Önce aynı sürede waiting oyun var mı kontrol et
     waiting_game = db.query(models.Game).filter(
         (models.Game.status == "waiting") &
@@ -47,12 +65,20 @@ async def create_game(request: Request, user_id: int = Query(...), db: Session =
     ).first()
 
     if waiting_game:
-        # Eğer bekleyen bir oyun varsa, eşleş
+        # Eşleşme sağla
         waiting_game.player2_id = user_id
         waiting_game.status = "active"
-        waiting_game.turn_user_id = waiting_game.player1_id  # 🛠️ İLK SIRA player1'da başlasın
+        waiting_game.turn_user_id = waiting_game.player1_id
+        waiting_game.player1_time_left = base_time
+        waiting_game.player2_time_left = base_time
+        waiting_game.last_move_time = now
+
         db.commit()
         db.refresh(waiting_game)
+
+        # ⛏️ Mayın ve ödül dağılımı buraya eklendi
+        assign_mines_and_rewards(db, waiting_game.id)
+
         print(f"✅ Eşleşme yapıldı! Oyun ID: {waiting_game.id}")
         return {
             "message": "Eşleşme bulundu! Oyun başladı.",
@@ -60,18 +86,23 @@ async def create_game(request: Request, user_id: int = Query(...), db: Session =
             "player1_id": waiting_game.player1_id,
             "player2_id": waiting_game.player2_id
         }
+
     else:
-        # Eğer bekleyen oyun yoksa yeni bir waiting oyun oluştur
+        # Yeni waiting oyun oluştur
         new_game = models.Game(
             player1_id=user_id,
             player2_id=None,
             status="waiting",
             duration=duration,
-            turn_user_id=user_id  # 🛠️ Oyun başlatan kişi ilk başlar
+            turn_user_id=user_id,
+            player1_time_left=base_time,
+            player2_time_left=base_time,
+            last_move_time=now
         )
         db.add(new_game)
         db.commit()
         db.refresh(new_game)
+
         print(f"⏳ Beklemeye alındı. Yeni oyun ID: {new_game.id}")
         return {
             "message": "Başka bir oyuncu bekleniyor...",
@@ -184,13 +215,18 @@ async def get_board(game_id: int, db: Session = Depends(get_db)):
 
 
 
-
-
+# app/routers/game.py
 
 @router.post("/make_move")
-async def make_move(request: Request, game_id: int = Query(...), db: Session = Depends(get_db)):
+async def make_move(
+    request: Request,
+    game_id: int = Query(...),
+    user_id: int = Query(...),
+    db: Session = Depends(get_db)
+):
     data = await request.json()
     board_state = data.get("board_state")
+    placed_tiles = data.get("placed_tiles", [])
 
     if board_state is None:
         raise HTTPException(status_code=400, detail="Tahta bilgisi eksik.")
@@ -199,25 +235,57 @@ async def make_move(request: Request, game_id: int = Query(...), db: Session = D
     if not game:
         raise HTTPException(status_code=404, detail="Oyun bulunamadı.")
 
-    # Tahta kaydediliyor
-    game.board_state = json.dumps(board_state)
+    # 🔍 Çarpanlar iptal edilmiş mi kontrol et
+    ignore_multipliers = False
+    for tile in placed_tiles:
+        row, col = tile["row"], tile["col"]
+        mine = db.query(models.GameMine).filter_by(game_id=game.id, row=row, col=col).first()
+        if mine and mine.type == "cancel_multipliers":
+            ignore_multipliers = True
+            break
 
-    # Sıra değiştirme
+    # 🧮 Skoru hesapla
+    base_score = calculate_score(board_state, placed_tiles, ignore_multipliers=ignore_multipliers)
+
+    # 💣 Mayın ve 🎁 Ödül etkilerini uygula
+    final_score, triggered_mines, triggered_rewards, _ = apply_mine_and_reward_effects(
+        db=db,
+        game=game,
+        placed_tiles=placed_tiles,
+        base_score=base_score
+    )
+
+    # 📝 Skoru oyuncuya yaz
     if game.turn_user_id == game.player1_id:
-        game.turn_user_id = game.player2_id
+        game.player1_score += final_score
     else:
-        game.turn_user_id = game.player1_id
+        game.player2_score += final_score
+
+    # ♻️ Tahtayı ve sırayı güncelle
+    game.board_state = json.dumps(board_state)
+    game.turn_user_id = game.player2_id if game.turn_user_id == game.player1_id else game.player1_id
 
     db.commit()
     db.refresh(game)
 
+    # 👤 Skorları kullanıcıya göre dön
+    your_score = game.player1_score if user_id == game.player1_id else game.player2_score
+    opponent_score = game.player2_score if user_id == game.player1_id else game.player1_score
+
     return {
-        "message": "Hamle yapıldı ve sıra değiştirildi.",
-        "turn_user_id": game.turn_user_id
+        "message": "Hamle yapıldı.",
+        "score": final_score,
+        "your_score": your_score,
+        "opponent_score": opponent_score,
+        "turn_user_id": game.turn_user_id,
+        "triggered_mines": triggered_mines,
+        "triggered_rewards": triggered_rewards,
     }
-    
-    
-    
+
+
+
+
+
     
 @router.get("/turn")
 async def get_turn(game_id: int, db: Session = Depends(get_db)):
@@ -235,31 +303,66 @@ async def get_turn(game_id: int, db: Session = Depends(get_db)):
     return {"turn_user_id": game.turn_user_id}
 
 
-
 @router.post("/change_turn")
 async def change_turn(payload: dict = Body(...), db: Session = Depends(get_db)):
-    """
-    turn_user_id bilgisini değiştirir (player1 <-> player2).
-    """
     game_id = payload.get("game_id")
     if not game_id:
         raise HTTPException(status_code=400, detail="Eksik game_id gönderildi.")
 
     game = db.query(models.Game).filter(models.Game.id == game_id).first()
-
     if not game:
         raise HTTPException(status_code=404, detail="Oyun bulunamadı.")
 
-    # Şu an kimdeyse, diğer oyuncuya geç
-    if game.turn_user_id == game.player1_id:
-        game.turn_user_id = game.player2_id
-    else:
-        game.turn_user_id = game.player1_id
+    now = datetime.utcnow()
+    
+    # Süre azalt
+    if game.last_move_time:
+        elapsed = (now - game.last_move_time).total_seconds()
 
+        if game.turn_user_id == game.player1_id:
+            game.player1_time_left -= elapsed
+        elif game.turn_user_id == game.player2_id:
+            game.player2_time_left -= elapsed
+
+    # Sıra değiştir
+    game.turn_user_id = (
+        game.player2_id if game.turn_user_id == game.player1_id else game.player1_id
+    )
+    game.last_move_time = now
     db.commit()
-    db.refresh(game)
 
-    return {"message": "Sıra değiştirildi.", "turn_user_id": game.turn_user_id}
+    return {
+        "message": "Sıra değiştirildi.",
+        "turn_user_id": game.turn_user_id,
+        "p1_time_left": game.player1_time_left,
+        "p2_time_left": game.player2_time_left
+    }
+
+
+
+@router.get("/time-status")
+def get_time_status(game_id: int, db: Session = Depends(get_db)):
+    game = db.query(models.Game).filter(models.Game.id == game_id).first()
+    if not game:
+        raise HTTPException(status_code=404, detail="Oyun bulunamadı.")
+
+    now = datetime.utcnow()
+    p1_time = game.player1_time_left
+    p2_time = game.player2_time_left
+
+    if game.last_move_time:
+        elapsed = (now - game.last_move_time).total_seconds()
+        if game.turn_user_id == game.player1_id:
+            p1_time -= elapsed
+        elif game.turn_user_id == game.player2_id:
+            p2_time -= elapsed
+
+    return {
+        "player1_time_left": max(p1_time, 0),
+        "player2_time_left": max(p2_time, 0)
+    }
+
+
 
 
 
@@ -276,69 +379,205 @@ async def get_game_details(game_id: int, db: Session = Depends(get_db)):
         "player1_username": player1.username if player1 else None,
         "player2_username": player2.username if player2 else None,
         "player1_score": game.player1_score if hasattr(game, 'player1_score') else 0,
-        "player2_score": game.player2_score if hasattr(game, 'player2_score') else 0
+        "player2_score": game.player2_score if hasattr(game, 'player2_score') else 0,
+        "turn_user_id": game.turn_user_id,
+        "status": game.status,
+        "winner_id": game.winner_id
     }
 
 
-@router.post("/end-game")
-async def end_game(
-    payload: dict = Body(...),
-    db: Session = Depends(get_db)
-):
-    """
-    Oyun sonu puan hesaplar ve kazananı belirler.
-    Flutter şu bilgileri JSON body olarak göndermeli:
-    {
-      "game_id": 1,
-      "teslim_eden": null,
-      "iki_pas": false,
-      "zaman_asimi": null,
-      "mayin_etkileri": {
-        "player1": -5,
-        "player2": 0
-      }
-    }
-    """
-    game_id = payload.get("game_id")
-    teslim_eden = payload.get("teslim_eden")
-    iki_pas = payload.get("iki_pas", False)
-    zaman_asimi = payload.get("zaman_asimi")
-    mayin_etkileri = payload.get("mayin_etkileri")
 
-    if game_id is None:
-        raise HTTPException(status_code=400, detail="Eksik game_id gönderildi.")
+class WordCheckRequest(BaseModel):
+    word: str
+
+
+
+
+@router.post("/check-word")
+async def check_word(payload: WordCheckRequest):
+    word = payload.word.strip().lower()
+    print(f"🧪 Kontrol ediliyor: '{word}'")
+
+    if kelime_var_mi(word):
+        print(f"✅ Geçerli kelime: {word}")
+        return {"result": f"✅ Geçerli kelime: {word}"}
+    else:
+        print(f"❌ Geçersiz kelime: {word}")
+        return {"result": f"❌ Geçersiz kelime: {word}"}
+    
+    
+    
+    
+@router.get("/draw-letters")
+def draw_letters(game_id: int, user_id: int, count: int = 7, db: Session = Depends(get_db)):
+    pool = game_manager.get_pool(game_id)  # 🔄 Güncel kullanım
+
+    drawn_letters = pool.draw_letters(count)
 
     game = db.query(models.Game).filter(models.Game.id == game_id).first()
-
     if not game:
         raise HTTPException(status_code=404, detail="Oyun bulunamadı.")
 
-    # Player skorları
-    player1_puan = game.player1_score or 0
-    player2_puan = game.player2_score or 0
+    if user_id == game.player1_id:
+        game.player1_tiles = (game.player1_tiles or []) + drawn_letters
+    elif user_id == game.player2_id:
+        game.player2_tiles = (game.player2_tiles or []) + drawn_letters
+    else:
+        raise HTTPException(status_code=400, detail="Bu kullanıcı bu oyunun oyuncusu değil.")
 
-    # Eldeki kalan harfler
-    player1_tiles = game.player1_tiles or []
-    player2_tiles = game.player2_tiles or []
-
-    # Skoru hesapla
-    sonuc = oyun_sonu_hesapla(
-        player1_puan=player1_puan,
-        player2_puan=player2_puan,
-        player1_tiles=player1_tiles,
-        player2_tiles=player2_tiles,
-        teslim_eden=teslim_eden,
-        iki_pas=iki_pas,
-        zaman_asimi=zaman_asimi,
-        mayin_etkileri=mayin_etkileri
-    )
-
-    # Sonuçları kaydet
-    game.status = "finished"
     db.commit()
-    db.refresh(game)
+    print(f"🎯 draw_letters: {drawn_letters} | user_id: {user_id} | game_id: {game_id}")
+    return {"drawn": drawn_letters, "remaining": pool.remaining_letters()}
+
+
+
+
+@router.get("/remaining-letters")
+def get_remaining_letters(game_id: int):
+    pool = game_manager.get_pool(game_id)
+    return {"remaining": pool.remaining_letters()}
+
+
+
+
+
+
+
+
+
+
+
+
+@router.post("/pass")
+async def player_pass(game_id: int, user_id: int, db: Session = Depends(get_db)):
+    game = db.query(models.Game).filter(models.Game.id == game_id).first()
+    if not game:
+        raise HTTPException(status_code=404, detail="Oyun bulunamadı.")
+
+    if game.status == "finished":
+        raise HTTPException(status_code=400, detail="Oyun zaten bitmiş durumda.")
+
+    # 🔁 Pas ve sıra işlemleri (sıra kontrolü kaldırıldı!)
+    if user_id == game.player1_id:
+        game.pass_count_player1 += 1
+        game.turn_user_id = game.player2_id
+        print("➡️ Sıra oyuncu 2'ye geçti")
+    elif user_id == game.player2_id:
+        game.pass_count_player2 += 1
+        game.turn_user_id = game.player1_id
+        print("➡️ Sıra oyuncu 1'e geçti")
+    else:
+        raise HTTPException(status_code=400, detail="Bu oyuncu bu oyunun oyuncusu değil.")
+
+    # 🎯 2'şer pas sonrası oyun bitirme
+    if game.pass_count_player1 >= 2 and game.pass_count_player2 >= 2:
+        game.status = "finished"
+        game.turn_user_id = None  # ❌ Oyun bitince sıra yok
+
+        # 🏆 Kazananı belirle
+        if game.player1_score > game.player2_score:
+            game.winner_id = game.player1_id
+        elif game.player2_score > game.player1_score:
+            game.winner_id = game.player2_id
+        else:
+            game.winner_id = None  # Beraberlik
+
+        print(f"🏁 Oyun sona erdi! Her iki oyuncu da 2 pas geçti. Oyun ID: {game_id}")
+
+    db.commit()
 
     return {
-        "message": "Oyun başarıyla sonuçlandı.",
-        "sonuc": sonuc
+        "message": "Pas kaydedildi.",
+        "p1_pass": game.pass_count_player1,
+        "p2_pass": game.pass_count_player2,
+        "game_status": game.status,
+        "turn_user_id": game.turn_user_id,
+        "winner_id": game.winner_id
     }
+
+
+
+
+
+@router.post("/resign")
+async def player_resign(game_id: int, user_id: int, db: Session = Depends(get_db)):
+    game = db.query(models.Game).filter(models.Game.id == game_id).first()
+    if not game:
+        raise HTTPException(status_code=404, detail="Oyun bulunamadı.")
+
+    if game.status == "finished":
+        return {"message": "Oyun zaten bitmiş durumda."}
+
+    # Oyuncu kontrolü ve kazanan + çekilen ataması
+    if user_id == game.player1_id:
+        game.winner_id = game.player2_id
+        game.resigned_user_id = game.player1_id  # 🆕 EKLENDİ
+    elif user_id == game.player2_id:
+        game.winner_id = game.player1_id
+        game.resigned_user_id = game.player2_id  # 🆕 EKLENDİ
+    else:
+        raise HTTPException(status_code=400, detail="Bu oyuncu bu oyunun oyuncusu değil.")
+
+    game.status = "finished"
+    db.commit()
+
+    print(f"🏳️ Oyuncu çekildi! User ID: {user_id}, Game ID: {game_id}")
+    return {
+        "message": "Oyuncu oyundan çekildi, oyun sona erdi.",
+        "winner_id": game.winner_id,
+        "resigned_user_id": game.resigned_user_id,  # 🆕 Opsiyonel olarak frontend'e de iletilebilir
+        "game_status": game.status
+    }
+
+
+
+
+
+
+@router.get("/check-time-and-finish")
+async def check_time_and_finish(game_id: int, db: Session = Depends(get_db)):
+    game = db.query(models.Game).filter(models.Game.id == game_id).first()
+    if not game:
+        raise HTTPException(status_code=404, detail="Oyun bulunamadı.")
+
+    now = datetime.utcnow()
+    p1_time = game.player1_time_left
+    p2_time = game.player2_time_left
+
+    if game.last_move_time:
+        elapsed = (now - game.last_move_time).total_seconds()
+        if game.turn_user_id == game.player1_id:
+            p1_time -= elapsed
+        elif game.turn_user_id == game.player2_id:
+            p2_time -= elapsed
+
+    if p1_time <= 0 or p2_time <= 0:
+        game.status = "finished"
+        game.player1_time_left = max(p1_time, 0)
+        game.player2_time_left = max(p2_time, 0)
+
+        if p1_time <= 0:
+            game.winner_id = game.player2_id
+        else:
+            game.winner_id = game.player1_id
+
+        db.commit()
+        return {
+            "message": "Süre bitti. Oyun sona erdi.",
+            "winner_id": game.winner_id,
+            "p1_time_left": game.player1_time_left,
+            "p2_time_left": game.player2_time_left
+        }
+
+    return {
+        "message": "Henüz süresi biten oyuncu yok.",
+        "p1_time_left": max(p1_time, 0),
+        "p2_time_left": max(p2_time, 0)
+    }
+
+
+
+
+
+
+

@@ -3,31 +3,35 @@ import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/new_game_screen.dart';
-import 'screens/my_games_screen.dart';
 import 'screens/finished_games_screen.dart';
-import 'screens/game_screen.dart';
+import 'screens/active_games_screen.dart'; // ✅ EKLENDİ
+import 'screens/check_word_screen.dart';
 
 void main() {
-  runApp(WordBattleApp());
+  runApp(const WordBattleApp());
 }
 
 class WordBattleApp extends StatelessWidget {
+  const WordBattleApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Kelime Mayınları',
-      theme: ThemeData(primarySwatch: Colors.indigo),
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        primarySwatch: Colors.indigo,
+        scaffoldBackgroundColor: Colors.white,
+      ),
       initialRoute: '/login',
       routes: {
-        '/login': (context) => LoginScreen(),
+        '/login': (context) => const LoginScreen(),
         '/register': (context) => RegisterScreen(),
-        '/home': (context) => HomeScreen(),
-        '/new_game': (context) => NewGameScreen(),
-        '/my_games': (context) => MyGamesScreen(),
-        '/check-word': (context) => const CheckWordScreen(),
-        '/finished_games':
-            (context) => FinishedGamesScreen(), // 🔥 doğru widget
-        '/game': (context) => GameScreen(gameId: 0, userId: 0),
+        '/home': (context) => const HomeScreen(),
+        '/new_game': (context) => const NewGameScreen(),
+        '/finished_games': (context) => const FinishedGamesScreen(),
+        '/my_games': (context) => const ActiveGamesScreen(), // ✅ EKLENDİ
+        '/check_word': (context) => const CheckWordScreen(),
       },
     );
   }

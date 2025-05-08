@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import '../user_session.dart';
 
 class FinishedGamesScreen extends StatefulWidget {
   const FinishedGamesScreen({super.key});
@@ -20,7 +21,7 @@ class _FinishedGamesScreenState extends State<FinishedGamesScreen> {
   }
 
   Future<void> fetchFinishedGames() async {
-    final int userId = 1;
+    final int userId = UserSession.userId!;
     final String url = 'http://localhost:8000/game/finished?user_id=$userId';
 
     try {
